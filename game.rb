@@ -63,8 +63,7 @@ rescue StandardError => e
     exit(0)
 end
 
-
-GAME_DATA_PATH = "chess_games/chess.pgn"
+GAME_DATA_PATH = './chess-games/chess.pgn'
 TMP_FILENAME = "/tmp/chess.pgn"
 game = nil
 game_content = nil
@@ -73,12 +72,7 @@ game_content = nil
 # Get the contents of the game board.
 # ---------------------------------------
 begin
-    game_content_raw = @octokit.contents(
-    ENV.fetch('REPOSITORY'),
-    path: GAME_DATA_PATH
-    )
-
-    game_content = Base64.decode64(game_content_raw&.content.to_s) unless game_content_raw&.content.to_s.blank?
+    game_content = File.open('./chess_games/chess.pgn').read
 rescue StandardError => e
     # no file exists... so no game... so... go ahead and create it
     game = Chess::Game.new
@@ -91,8 +85,7 @@ game = if CHESS_GAME_CMD == 'new' || game.present?
             # ---------------------------------------
             begin
                 ## Load the current game
-                File.write TMP_FILENAME, game_content
-                Chess::Game.load_pgn TMP_FILENAME
+                Chess::Game.load_pgn './chess_games/chess.pgn'
             rescue StandardError => e
                 comment_text = "@#{ENV.fetch('EVENT_USER_LOGIN')} Game data couldn't loaded: #{GAME_DATA_PATH}"
                 error_notification(ENV.fetch('REPOSITORY'), ENV.fetch('EVENT_ISSUE_NUMBER'), 'confused', comment_text, e)
@@ -165,27 +158,6 @@ if CHESS_GAME_CMD == 'move'
         error_notification(ENV.fetch('REPOSITORY'), ENV.fetch('EVENT_ISSUE_NUMBER'), 'confused', comment_text, e)
         exit(0)
     end
-
-
-    #
-    # Save the game board.
-    # ---------------------------------------
-    begin
-        @octokit.create_contents(
-        ENV.fetch('REPOSITORY'),
-        GAME_DATA_PATH,
-        "@#{ENV.fetch('EVENT_USER_LOGIN')} move #{CHESS_USER_MOVE}",
-        game.pgn.to_s,
-        branch: 'master',
-        sha:    game_content_raw&.sha
-        )
-    rescue StandardError => e
-        comment_text = "@#{ENV.fetch('EVENT_USER_LOGIN')} Couldn't save game data. Sorry."
-        error_notification(ENV.fetch('REPOSITORY'), ENV.fetch('EVENT_ISSUE_NUMBER'), 'confused', comment_text, e)
-        exit(0)
-    end
-
-    
 
     #
     # Game over thanks for playing.
@@ -438,11 +410,9 @@ end
 # ---------------------------------------
 begin
     renderer = Redcarpet::Markdown.new(Redcarpet::Render::HTML.new(), tables: true)
-    html = renderer.render(actual_board)
-    kit = IMGKit.new(html, width: 0, height: 0)
+    board_html_content = renderer.render(actual_board)
+    kit = IMGKit.new(board_html_content, width: 0, height: 0)
     kit.stylesheets << './renders/style.css'
-    # file = kit.to_file('./renders/board.jpg')
-    # board_jpg_content = File.open("./renders/board.jpg", "rb", :encoding => 'base64').read
     board_jpg_content = kit.to_img
 rescue StandardError => e
     comment_text = "@#{ENV.fetch('EVENT_USER_LOGIN')} Couldn't create the image of the board. Move *was* saved, however."
@@ -461,59 +431,30 @@ begin
     latest_commit_sha = @octokit.ref(gitrepo, 'heads/master').object.sha
     base_tree_sha = @octokit.commit(gitrepo, latest_commit_sha).commit.tree.sha
 
-    # Get the SHA of the existing contents
-    current_readme_sha = @octokit.contents(
-    gitrepo,
-    path: 'README.md'
-    )&.sha
-
-    current_img_sha = @octokit.contents(
-    gitrepo,
-    path: 'renders/board.jpg'
-    )&.sha
-
-    okblob_readme = @octokit.create_blob(gitrepo, new_readme)
-    okblob_board = @octokit.create_blob(gitrepo, Base64.encode64(board_jpg_content), encoding: 'base64')
-
-    # New contents
-    # path => new content
-    new_contents = [
-        ["README.md", new_readme, okblob_readme],
-        ["renders/board.jpg", board_jpg_content, okblob_board]
+    all_files = [
+        ['README.md', new_readme, 'utf-8'],
+        ['renders/board.jpg', board_html_content, 'base64'],
+        ['renders/board.html', board_jpg_content, 'utf-8'],
+        ['chess_games/chess.pgn', game.pgn.to_s, 'utf-8']
     ]
 
-    # Create new tree
-    new_tree = new_contents.map do |path, new_content, new_encoding|
+    new_tree = all_files.map do |path, new_content, encoding|
         Hash(
             path: path,
             mode: "100644",
             type: "blob",
-            sha: new_encoding
+            sha: @octokit.create_blob(gitrepo, encoding == 'base64' ? Base64.encode64(new_content) : new_content, encoding)
         )
     end
-
-    puts "Reached 3"
 
     # Create a commit
     new_tree_sha = @octokit.create_tree(gitrepo, new_tree, base_tree: base_tree_sha).sha
     commit_message = "@#{ENV.fetch('EVENT_USER_LOGIN')} move #{CHESS_USER_MOVE}"
     new_commit_sha = @octokit.create_commit(gitrepo, commit_message, new_tree_sha, latest_commit_sha).sha
 
-    puts "Reached 4"
-
     # Push
     updated_ref = @octokit.update_ref(gitrepo, "heads/master", new_commit_sha)
-    puts "Reached 5"
-    puts updated_ref
 
-    # @octokit.create_contents(
-    # gitrepo,
-    # 'README.md',
-    # "@#{ENV.fetch('EVENT_USER_LOGIN')} move #{CHESS_USER_MOVE}",
-    # new_readme,
-    # branch: 'master',
-    # sha:    current_readme_sha
-    # )
 rescue StandardError => e
     comment_text = "@#{ENV.fetch('EVENT_USER_LOGIN')} Couldn't update render of the game board. Move *was* saved, however."
     error_notification(gitrepo, ENV.fetch('EVENT_ISSUE_NUMBER'), 'confused', comment_text, e)
