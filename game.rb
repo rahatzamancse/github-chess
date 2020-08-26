@@ -22,7 +22,7 @@ end
 end
 
 # Authenticate using GITHUB_TOKEN
-@octokit = Octokit::Client.new(access_token: "${{ secrets.GITHUB_TOKEN }}")
+@octokit = Octokit::Client.new(access_token: ENV.fetch('GITHUB_SECRET'))
 @octokit.auto_paginate = true
 @octokit.default_media_type = ::Octokit::Preview::PREVIEW_TYPES[:integrations]
 # Show we've got eyes on the triggering comment.

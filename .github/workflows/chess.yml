@@ -15,6 +15,7 @@ jobs:
         echo ::set-env name=REPOSITORY::${{ github.repository }}
         echo ::set-env name=EVENT_ISSUE_NUMBER::${{ github.event.issue.number }}
         echo ::set-env name=EVENT_USER_LOGIN::${{ github.event.issue.user.login }}
+        echo ::set-env name=GITHUB_SECRET::${{ secrets.GITHUB_TOKEN }}
 
       # We <3 Ruby, so let's use it + Octokit to ease the
       # scripting and API interactions.
@@ -34,5 +35,7 @@ jobs:
         gem install octokit -N --silent
         gem install chess -N --silent
 
+    - uses: actions/checkout@v2
     - name: Play
-      run: ruby ./on-issue.rb
+      run: |
+        ruby ./game.rb
