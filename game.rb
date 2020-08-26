@@ -3,6 +3,8 @@ require 'active_support/core_ext/object'
 require 'active_support/core_ext/array'
 require 'octokit'
 require 'chess'
+require 'imgkit'
+require 'redcarpet'
 
 
 @preview_headers = [
@@ -17,6 +19,8 @@ def error_notification(repo_nwo, issue_num, reaction, new_comment_body, e=nil)
 if e.present?
     puts '-----------'
     puts "Exception: #{e}"
+    puts '-----------'
+    puts "Backtrace: #{e.backtrace}"
     puts '-----------'
 end
 end
@@ -323,8 +327,11 @@ board = {
 "1": { a:  0, b:  1, c:  2, d:  3, e:  4, f:  5, g:  6, h:  7 },
 }
 
-new_readme.concat "|   | A | B | C | D | E | F | G | H |\n"
-new_readme.concat "| - | - | - | - | - | - | - | - | - |\n"
+actual_board = <<~MY_BOARD
+| X | A | B | C | D | E | F | G | H |
+| - | - | - | - | - | - | - | - | - |
+MY_BOARD
+
 (1..8).to_a.reverse.each_with_index do |row|
 a = "![](https://raw.githubusercontent.com/#{ENV.fetch('REPOSITORY')}/master/chess_images/#{(game.board[board[:"#{row}"][:a]] || 'blank').to_s}.png)"
 b = "![](https://raw.githubusercontent.com/#{ENV.fetch('REPOSITORY')}/master/chess_images/#{(game.board[board[:"#{row}"][:b]] || 'blank').to_s}.png)"
@@ -344,8 +351,10 @@ h = "![](https://raw.githubusercontent.com/#{ENV.fetch('REPOSITORY')}/master/che
 # g = game.board[board[:"#{row}"][:g]]
 # h = game.board[board[:"#{row}"][:h]]
 
-new_readme.concat "| #{row} | #{a} | #{b} | #{c} | #{d} | #{e} | #{f} | #{g} | #{h} |\n"
+actual_board.concat "| #{row} | #{a} | #{b} | #{c} | #{d} | #{e} | #{f} | #{g} | #{h} |\n"
 end
+
+new_readme.concat actual_board
 
 
 if game.over?
@@ -406,7 +415,6 @@ else
     new_readme.concat "| ¯\\_(ツ)_/¯ | History temporarily unavailable. |\n"
 end
 
-
 new_readme.concat <<~HTML
 
 **Top 20 Leaderboard: Most moves across all games, except me.**
@@ -425,26 +433,89 @@ else
 end
 
 
+#
+# Render the image of the board
+# ---------------------------------------
+begin
+    renderer = Redcarpet::Markdown.new(Redcarpet::Render::HTML.new(), tables: true)
+    html = renderer.render(actual_board)
+    kit = IMGKit.new(html, width: 0, height: 0)
+    kit.stylesheets << './renders/style.css'
+    # file = kit.to_file('./renders/board.jpg')
+    # board_jpg_content = File.open("./renders/board.jpg", "rb", :encoding => 'base64').read
+    board_jpg_content = kit.to_img
+rescue StandardError => e
+    comment_text = "@#{ENV.fetch('EVENT_USER_LOGIN')} Couldn't create the image of the board. Move *was* saved, however."
+    error_notification(ENV.fetch('REPOSITORY'), ENV.fetch('EVENT_ISSUE_NUMBER'), 'confused', comment_text, e)
+    exit(0)
+end
+
 
 #
 # Update the game with next moves.
 # ---------------------------------------
 begin
+    gitrepo = ENV.fetch('REPOSITORY')
+
+    # Get the master branch
+    latest_commit_sha = @octokit.ref(gitrepo, 'heads/master').object.sha
+    base_tree_sha = @octokit.commit(gitrepo, latest_commit_sha).commit.tree.sha
+
+    # Get the SHA of the existing contents
     current_readme_sha = @octokit.contents(
-    ENV.fetch('REPOSITORY'),
+    gitrepo,
     path: 'README.md'
     )&.sha
 
-    @octokit.create_contents(
-    ENV.fetch('REPOSITORY'),
-    'README.md',
-    "@#{ENV.fetch('EVENT_USER_LOGIN')} move #{CHESS_USER_MOVE}",
-    new_readme,
-    branch: 'master',
-    sha:    current_readme_sha
-    )
+    current_img_sha = @octokit.contents(
+    gitrepo,
+    path: 'renders/board.jpg'
+    )&.sha
+
+    okblob_readme = @octokit.create_blob(gitrepo, new_readme)
+    okblob_board = @octokit.create_blob(gitrepo, Base64.encode64(board_jpg_content), encoding: 'base64')
+
+    # New contents
+    # path => new content
+    new_contents = [
+        ["README.md", new_readme, okblob_readme],
+        ["renders/board.jpg", board_jpg_content, okblob_board]
+    ]
+
+    # Create new tree
+    new_tree = new_contents.map do |path, new_content, new_encoding|
+        Hash(
+            path: path,
+            mode: "100644",
+            type: "blob",
+            sha: new_encoding
+        )
+    end
+
+    puts "Reached 3"
+
+    # Create a commit
+    new_tree_sha = @octokit.create_tree(gitrepo, new_tree, base_tree: base_tree_sha).sha
+    commit_message = "@#{ENV.fetch('EVENT_USER_LOGIN')} move #{CHESS_USER_MOVE}"
+    new_commit_sha = @octokit.create_commit(gitrepo, commit_message, new_tree_sha, latest_commit_sha).sha
+
+    puts "Reached 4"
+
+    # Push
+    updated_ref = @octokit.update_ref(gitrepo, "heads/master", new_commit_sha)
+    puts "Reached 5"
+    puts updated_ref
+
+    # @octokit.create_contents(
+    # gitrepo,
+    # 'README.md',
+    # "@#{ENV.fetch('EVENT_USER_LOGIN')} move #{CHESS_USER_MOVE}",
+    # new_readme,
+    # branch: 'master',
+    # sha:    current_readme_sha
+    # )
 rescue StandardError => e
     comment_text = "@#{ENV.fetch('EVENT_USER_LOGIN')} Couldn't update render of the game board. Move *was* saved, however."
-    error_notification(ENV.fetch('REPOSITORY'), ENV.fetch('EVENT_ISSUE_NUMBER'), 'confused', comment_text, e)
+    error_notification(gitrepo, ENV.fetch('EVENT_ISSUE_NUMBER'), 'confused', comment_text, e)
     exit(0)
 end
