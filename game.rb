@@ -45,7 +45,7 @@ ENV.fetch('EVENT_ISSUE_NUMBER'),
 # ------------------------
 begin
     # validate we can parse title Chess|new|e3c2|1
-    title_split = '${{ github.event.issue.title }}'.split('|')
+    title_split = ENV.fetch('EVENT_ISSUE_TITLE').gsub(/^"+|"+$/, '').split('|')
     CHESS_GAME_NUM   = title_split&.fourth || ENV.fetch('EVENT_ISSUE_NUMBER').to_s
     CHESS_GAME_TITLE = title_split&.first.to_s + CHESS_GAME_NUM
     CHESS_GAME_CMD   = title_split&.second.to_s
