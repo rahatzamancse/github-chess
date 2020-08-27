@@ -31,7 +31,7 @@ def error_notification(repo_nwo, issue_num, reaction, new_comment_body, e=nil)
 end
 
 # Environment Variables
-RIPOSITORY         = ENV.fetch('REPOSITORY')
+REPOSITORY         = ENV.fetch('REPOSITORY')
 EVENT_ISSUE_NUMBER = ENV.fetch('EVENT_ISSUE_NUMBER')
 EVENT_ISSUE_TITLE  = ENV.fetch('EVENT_ISSUE_TITLE')
 EVENT_USER_LOGIN   = ENV.fetch('EVENT_USER_LOGIN')
@@ -44,13 +44,13 @@ RAHAT_REPO         = 'rahatzamancse/github-chess'
 
 # Show we've got eyes on the triggering comment.
 @octokit.create_issue_reaction(
-    RIPOSITORY,
+    REPOSITORY,
     EVENT_ISSUE_NUMBER,
     'eyes',
     {accept: @preview_headers}
 )
 @octokit.create_issue_reaction(
-    RIPOSITORY,
+    REPOSITORY,
     EVENT_ISSUE_NUMBER,
     'rocket',
     {accept: @preview_headers}
@@ -72,7 +72,7 @@ begin
     raise StandardError.new 'new|move are the only allowed commands' unless ['new','move'].include? CHESS_GAME_CMD
 rescue StandardError => e
     comment_text = "@#{EVENT_USER_LOGIN} The game title or move was unable to be parsed."
-    error_notification(RIPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
+    error_notification(REPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
     exit(0)
 end
 
@@ -97,7 +97,7 @@ else
                 Chess::Game.load_pgn GAME_DATA_PATH
             rescue StandardError => e
                 comment_text = "@#{EVENT_USER_LOGIN} Game data couldn't loaded: #{GAME_DATA_PATH}. I am sorry. I will look ahead to solve this soon. Feel free to give a PR if you want :)"
-                error_notification(RIPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
+                error_notification(REPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
                 exit(0)
             end
         end
@@ -106,7 +106,7 @@ end
 if CHESS_GAME_CMD == 'new' && game_content.present?
     begin
         @octokit.delete_contents(
-            RIPOSITORY,
+            REPOSITORY,
             GAME_DATA_PATH,
             "@#{EVENT_USER_LOGIN} delete to allow new game",
             game_content&.sha,
@@ -114,7 +114,7 @@ if CHESS_GAME_CMD == 'new' && game_content.present?
         )
     rescue StandardError => e
         comment_text = "@#{EVENT_USER_LOGIN} Game data #{GAME_DATA_PATH} couldn't be deleted to create new game :("
-        error_notification(RIPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
+        error_notification(REPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
         exit(0)
     end
 end
@@ -123,7 +123,7 @@ end
 
 begin
     issues = @octokit.list_issues(
-        RIPOSITORY,
+        REPOSITORY,
         state: 'closed',
         accept: @preview_headers
     )&.select{ |issue| issue&.reactions.confused == 0 }
@@ -142,10 +142,10 @@ if CHESS_GAME_CMD == 'move'
     i = 0
     issues&.each do |issue|
         break if issue.title.start_with? 'chess|new'
-        if issue.title.start_with?('chess|move|') && RIPOSITORY == RAHAT_REPO
+        if issue.title.start_with?('chess|move|') && REPOSITORY == RAHAT_REPO
             if issue.user.login == EVENT_USER_LOGIN
                 comment_text = "@#{EVENT_USER_LOGIN} Slow down! You _just_ moved, so can't immediately take the next turn. #{SHARE_END}"
-                error_notification(RIPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
+                error_notification(REPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
                 exit(0)
             end
             i += 1
@@ -160,7 +160,7 @@ if CHESS_GAME_CMD == 'move'
         game.move(CHESS_USER_MOVE) # ie move('e2e4', …, 'b1c3')
     rescue Chess::IllegalMoveError => e
         comment_text = "@#{EVENT_USER_LOGIN} Whaaa.. '#{CHESS_USER_MOVE}' is an invalid move! Usually this is because someone squeezed a move in just before you."
-        error_notification(RIPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
+        error_notification(REPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
         exit(0)
     end
 
@@ -169,7 +169,7 @@ if CHESS_GAME_CMD == 'move'
     # ---------------------------------------
     if game.over?
         # add label = end
-        @octokit.add_labels_to_an_issue(RIPOSITORY, EVENT_ISSUE_NUMBER, ["game-over"])
+        @octokit.add_labels_to_an_issue(REPOSITORY, EVENT_ISSUE_NUMBER, ["game-over"])
         game_stats = { 
             moves: 0,
             players: [],
@@ -182,7 +182,7 @@ if CHESS_GAME_CMD == 'move'
                 game_stats[:end_time] = issue.created_at
             end
             game_stats[:moves] += 1
-            if RIPOSITORY == RAHAT_REPO
+            if REPOSITORY == RAHAT_REPO
                 game_stats[:players].push "@#{issue.user.login}"
             else
                 game_stats[:players].push "#{issue.user.login}"
@@ -193,7 +193,7 @@ if CHESS_GAME_CMD == 'move'
         hours = (game_stats[:start_time] - game_stats[:end_time]).to_i.abs / 3600
 
         @octokit.add_comment(
-            RIPOSITORY,
+            REPOSITORY,
             EVENT_ISSUE_NUMBER,
             "That's game over! Thank you for playing that chess game. That game had #{game_stats[:moves]} moves, #{game_stats[:players]&.length} players, and went for #{hours} hours. Let's play again at https://github.com/rahatzamancse/github-chess.\n\nPlayers that game: #{game_stats[:players].join(', ')}"
         )
@@ -202,12 +202,12 @@ end
 
 
 @octokit.add_comment(
-    RIPOSITORY,
+    REPOSITORY,
     EVENT_ISSUE_NUMBER,
     "@#{EVENT_USER_LOGIN} Done. View back at https://github.com/rahatzamancse/github-chess\n\n#{SHARE_GAME_TEXT}"
 )
 
-@octokit.close_issue(RIPOSITORY, EVENT_ISSUE_NUMBER)
+@octokit.close_issue(REPOSITORY, EVENT_ISSUE_NUMBER)
 
 
 #
@@ -324,14 +324,14 @@ actual_board = <<~MY_BOARD
 MY_BOARD
 
 (1..8).to_a.reverse.each_with_index do |row|
-    a = "![](https://raw.githubusercontent.com/#{RIPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:a]] || 'blank').to_s}.png)"
-    b = "![](https://raw.githubusercontent.com/#{RIPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:b]] || 'blank').to_s}.png)"
-    c = "![](https://raw.githubusercontent.com/#{RIPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:c]] || 'blank').to_s}.png)"
-    d = "![](https://raw.githubusercontent.com/#{RIPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:d]] || 'blank').to_s}.png)"
-    e = "![](https://raw.githubusercontent.com/#{RIPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:e]] || 'blank').to_s}.png)"
-    f = "![](https://raw.githubusercontent.com/#{RIPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:f]] || 'blank').to_s}.png)"
-    g = "![](https://raw.githubusercontent.com/#{RIPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:g]] || 'blank').to_s}.png)"
-    h = "![](https://raw.githubusercontent.com/#{RIPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:h]] || 'blank').to_s}.png)"
+    a = "![](https://raw.githubusercontent.com/#{REPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:a]] || 'blank').to_s}.png)"
+    b = "![](https://raw.githubusercontent.com/#{REPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:b]] || 'blank').to_s}.png)"
+    c = "![](https://raw.githubusercontent.com/#{REPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:c]] || 'blank').to_s}.png)"
+    d = "![](https://raw.githubusercontent.com/#{REPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:d]] || 'blank').to_s}.png)"
+    e = "![](https://raw.githubusercontent.com/#{REPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:e]] || 'blank').to_s}.png)"
+    f = "![](https://raw.githubusercontent.com/#{REPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:f]] || 'blank').to_s}.png)"
+    g = "![](https://raw.githubusercontent.com/#{REPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:g]] || 'blank').to_s}.png)"
+    h = "![](https://raw.githubusercontent.com/#{REPOSITORY}/master/chess_images/#{(game.board[board[:"#{row}"][:h]] || 'blank').to_s}.png)"
 
     actual_board.concat "| #{row} | #{a} | #{b} | #{c} | #{d} | #{e} | #{f} | #{g} | #{h} |\n"
 end
@@ -341,7 +341,7 @@ new_readme.concat actual_board
 if game.over?
     new_readme.concat <<~HTML
 
-    ## Play again? [![](https://raw.githubusercontent.com/#{RIPOSITORY}/master/chess_images/new_game.png)](https://github.com/#{RIPOSITORY}/issues/new?title=chess%7Cnew)
+    ## Play again? [![](https://raw.githubusercontent.com/#{REPOSITORY}/master/chess_images/new_game.png)](https://github.com/#{REPOSITORY}/issues/new?title=chess%7Cnew)
 
 HTML
 
@@ -355,7 +355,7 @@ else
 HTML
 
     good_moves.each do |move|
-        new_readme.concat "| **#{move[:from].upcase}** | #{move[:to].map{|a| "[#{a.upcase}](https://github.com/#{RIPOSITORY}/issues/new?title=chess%7Cmove%7C#{move[:from]}#{a}%7C#{CHESS_GAME_NUM}&body=Just+push+%27Submit+new+issue%27.+You+don%27t+need+to+do+anything+else.)"}.join(' , ')} |\n"
+        new_readme.concat "| **#{move[:from].upcase}** | #{move[:to].map{|a| "[#{a.upcase}](https://github.com/#{REPOSITORY}/issues/new?title=chess%7Cmove%7C#{move[:from]}#{a}%7C#{CHESS_GAME_NUM}&body=Just+push+%27Submit+new+issue%27.+You+don%27t+need+to+do+anything+else.)"}.join(' , ')} |\n"
     end
 end
 
@@ -370,7 +370,7 @@ When you click a link, it opens a GitHub Issue with the required pre-populated t
 
 **Notice a problem?**
 
-Raise an [issue](https://github.com/#{RIPOSITORY}/issues), and include the text _cc @rahatzamancse_.
+Raise an [issue](https://github.com/#{REPOSITORY}/issues), and include the text _cc @rahatzamancse_.
 
 **Last few moves, this game**
 
@@ -425,7 +425,7 @@ begin
     board_jpg_content = kit.to_img
 rescue StandardError => e
     comment_text = "@#{EVENT_USER_LOGIN} Couldn't create the image of the board. Move *was* saved, however."
-    error_notification(RIPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
+    error_notification(REPOSITORY, EVENT_ISSUE_NUMBER, 'confused', comment_text, e)
     exit(0)
 end
 
