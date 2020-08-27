@@ -40,14 +40,14 @@ Raise an [issue](https://github.com/rahatzamancse/github-chess/issues), and incl
 
 | Move  | Who |
 | ----- | --- |
+| F2 to F3 | [@rahatzamancse](https://github.com/rahatzamancse) |
 | F2 to F3 | [@insaneshadowzaman](https://github.com/insaneshadowzaman) |
 | B3 to B2 | [@rahatzamancse](https://github.com/rahatzamancse) |
 | A4 to A3 | [@insaneshadowzaman](https://github.com/insaneshadowzaman) |
 | E5 to F6 | [@rahatzamancse](https://github.com/rahatzamancse) |
-| E5 to F6 | [@insaneshadowzaman](https://github.com/insaneshadowzaman) |
 
 **Top 20 Leaderboard: Most moves across all games, except me.**
 
 | Moves | Who |
 | ----- | --- |
-| 4 | [@insaneshadowzaman](https://github.com/insaneshadowzaman) |
+| 5 | [@insaneshadowzaman](https://github.com/insaneshadowzaman) |
