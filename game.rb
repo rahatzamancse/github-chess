@@ -433,8 +433,8 @@ begin
 
     all_files = [
         ['README.md', new_readme, 'utf-8'],
-        ['renders/board.jpg', board_html_content, 'base64'],
-        ['renders/board.html', board_jpg_content, 'utf-8'],
+        ['renders/board.html', board_html_content, 'utf-8'],
+        ['renders/board.jpg', board_jpg_content, 'base64'],
         ['chess_games/chess.pgn', game.pgn.to_s, 'utf-8']
     ]
 
